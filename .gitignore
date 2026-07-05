@@ -1,3 +1,5 @@
-/backend/venv
-/backend/database
-/backend/database.sql
+backend/venv
+backend/__pycache__
+backend/app/database
+backend/*.sql
+backend/*.db
