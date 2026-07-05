@@ -68,7 +68,6 @@ def signup(user_data: UserSignup):
 
     new_user_profile = {
         "id": user_id,
-        "email": user_data.email,
         "password_hash": hashed_password,
         "semesters": {}
     }
