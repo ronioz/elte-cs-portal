@@ -95,8 +95,30 @@ def get_semesters():
     return []
 
 @app.post("/api/v1/semesters", response_model=SemesterResponse)
-def add_semesters(semester_data: SemesterCreate):
-    pass
+def add_semesters(email: str, data: SemesterCreate):
+    users_db = load_db()
+    
+    semester_id = str(uuid.uuid4())
+    semester_name = data.name
+
+    for info in users_db[email]["semesters"].values():
+        if info["name"] == semester_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Semester already exists"
+            )
+
+    semester_data = {}
+    semester_data[semester_id] = {
+        "id": semester_id,
+        "name": semester_name,
+        "courses": {}
+    }
+
+    users_db[email]["semesters"][semester_id] = semester_data
+    save_db(users_db)
+
+    return semester_data
 
 @app.delete("/api/v1/semesters/{semester_id}")
 def delete_semester(semester_id: str):
