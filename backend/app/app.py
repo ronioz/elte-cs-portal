@@ -8,6 +8,8 @@ import uuid
 from passlib.context import CryptContext
 from database import load_db, save_db
 
+
+
 # SETTING UP APP AND DATABASE
 
 app = fastapi.FastAPI(title="ELTE CS Portal", description="Portal for ELTE Faculty of informatics")
@@ -51,7 +53,11 @@ class SemesterResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
+
 # API ENDPOINTS
+
+# LOGIN AND REGISTRATION
 
 @app.post("/api/v1/auth/signup")
 def signup(user_data: UserSignup):
@@ -90,13 +96,62 @@ def login(user_data: UserLogin):
     
     return {"message": "successfully logged in user"}
 
+
+
+# SEMESTERS AND COURSES
+
 @app.get("/api/v1/semesters", response_model=List[SemesterResponse])
-def get_semesters():
-    return []
+def get_semesters(email: str):
+    users_db = load_db()
+
+    if email not in users_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found"
+        )
+    
+    semesters_data = []
+
+    for info in users_db[email]["semesters"].values():
+        semester_info = {
+            "id": info["id"],
+            "name": info["name"],
+            "courses": list(info["courses".values()])
+        }
+
+        semesters_data.append(semester_info)
+
+    return semesters_data
 
 @app.post("/api/v1/semesters", response_model=SemesterResponse)
-def add_semesters(semester_data: SemesterCreate):
-    pass
+def add_semesters(email: str, data: SemesterCreate):
+    users_db = load_db()
+    
+    semester_id = str(uuid.uuid4())
+    semester_name = data.name
+
+    for info in users_db[email]["semesters"].values():
+        if info["name"] == semester_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Semester already exists"
+            )
+
+    semester_data = {
+        "id": semester_id,
+        "name": semester_name,
+        "courses": {}
+    }
+
+    users_db[email]["semesters"][semester_id] = semester_data
+    save_db(users_db)
+
+    response_payload = {
+        **semester_data,
+        "courses": list(semester_data["courses"].values())
+    }
+
+    return response_payload
 
 @app.delete("/api/v1/semesters/{semester_id}")
 def delete_semester(semester_id: str):
@@ -105,6 +160,10 @@ def delete_semester(semester_id: str):
 @app.post("/api/v1/courses", response_model=CourseResponse)
 def append_course_to_semester(course_data: CourseCreate, semester_id: str):
     pass
+
+
+
+# GPA CALCULATION
 
 @app.get("/api/v1/gpa/summary")
 def get_calculations():
