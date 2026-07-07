@@ -154,12 +154,85 @@ def add_semesters(email: str, data: SemesterCreate):
     return response_payload
 
 @app.delete("/api/v1/semesters/{semester_id}")
-def delete_semester(semester_id: str):
-    pass
+def delete_semester(email: str, semester_id: str):
+    users_db = load_db()
+
+    if email not in users_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found."
+        )
+
+    if semester_id not in users_db[email]["semesters"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Semester not found."
+        )
+    
+    del users_db[email]["semesters"][semester_id]
+
+    save_db(users_db)
+
+    return None
 
 @app.post("/api/v1/courses", response_model=CourseResponse)
-def append_course_to_semester(course_data: CourseCreate, semester_id: str):
-    pass
+def append_course_to_semester(email: str, course_data: CourseCreate, semester_id: str):
+    users_db = load_db()
+
+    if email not in users_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No email"
+        )
+    
+    if semester_id not in users_db[email]["semesters"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found"
+        )
+    
+    course_id = str(uuid.uuid4())
+
+    new_course = {
+        "id": course_id,
+        "name": course_data.name,
+        "credits": course_data.credits,
+        "grade": course_data.grade
+    }
+
+    users_db[email]["semesters"]["courses"][course_id] = new_course
+
+    save_db(users_db)
+
+    return new_course
+    
+@app.delete("/api/v1/semesters/{semester_id}/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_course(email: str, semester_id: str, course_id: str):
+    users_db = load_db()
+
+    if email not in users_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found."
+        )
+    
+    if semester_id not in users_db[email]["semesters"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Semester not found."
+        )
+    
+    if course_id not in users_db[email]["semesters"][semester_id]["courses"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found or unauthorized access"
+        )
+    
+    del users_db[email]["semesters"][semester_id]["courses"][course_id]
+
+    save_db(users_db)
+
+    return None
 
 
 
