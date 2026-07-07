@@ -206,6 +206,34 @@ def append_course_to_semester(email: str, course_data: CourseCreate, semester_id
 
     return new_course
     
+@app.delete("/api/v1/semesters/{semester_id}/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_course(email: str, semester_id: str, course_id: str):
+    users_db = load_db()
+
+    if email not in users_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found."
+        )
+    
+    if semester_id not in users_db[email]["semesters"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Semester not found."
+        )
+    
+    if course_id not in users_db[email]["semesters"][semester_id]["courses"]:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found or unauthorized access"
+        )
+    
+    del users_db[email]["semesters"][semester_id]["courses"][course_id]
+
+    save_db(users_db)
+
+    return None
+
 
 
 # GPA CALCULATION
