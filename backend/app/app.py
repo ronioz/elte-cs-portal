@@ -116,7 +116,7 @@ def get_semesters(email: str):
         semester_info = {
             "id": info["id"],
             "name": info["name"],
-            "courses": list(info["courses".values()])
+            "courses": list(info["courses"].values())
         }
 
         semesters_data.append(semester_info)
@@ -195,16 +195,18 @@ def append_course_to_semester(email: str, course_data: CourseCreate, semester_id
 
     new_course = {
         "id": course_id,
+        "semester_id": semester_id,
         "name": course_data.name,
         "credits": course_data.credits,
         "grade": course_data.grade
     }
 
-    users_db[email]["semesters"]["courses"][course_id] = new_course
+    users_db[email]["semesters"][semester_id]["courses"][course_id] = new_course
 
     save_db(users_db)
 
     return new_course
+
     
 @app.delete("/api/v1/semesters/{semester_id}/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_course(email: str, semester_id: str, course_id: str):
