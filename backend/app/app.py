@@ -1,5 +1,6 @@
 import fastapi
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
 import json
@@ -7,64 +8,71 @@ from pathlib import Path
 import uuid
 from passlib.context import CryptContext
 from database import load_db, save_db
+import jwt
+from datetime import datetime, timedelta, UTC
+from threading import Lock
+from models import SemesterCreate, SemesterGPA, SemesterResponse, SemesterUpdate, UserSignup, Token, CourseUpdate, CourseCreate, CourseResponse, GPASummary
 
 
 
-# SETTING UP APP AND DATABASE
+# SETTING UP APP, SECURITY AND DATABASE
 
 app = fastapi.FastAPI(title="ELTE CS Portal", description="Portal for ELTE Faculty of informatics")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+db_lock = Lock()
 
-# AUTHENTICATION SCHEMAS
+SECRET_KEY = "super-secret-key-change-in-production"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
-class UserSignup(BaseModel):
-    email: EmailStr
-    password: str = Field(
-        min_length = 8
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(UTC) + expires_delta
+    else:
+        expire = datetime.now(UTC) + timedelta(minutes=15)
+
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# DEPENDENCIES
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"}
     )
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
 
-# SEMESTERS & COURSES
+        if email is None:
+            raise credentials_exception
+    except jwt.PyJWTError:
+        raise credentials_exception
+    
+    with db_lock:
+        users_db = load_db()
 
-class CourseCreate(BaseModel):
-    name: str = Field(..., min_length=1)
-    credits: int = Field(..., gt=0)
-    grade: int = Field(..., gt=1, le=5)
+        if email not in users_db:
+            raise credentials_exception
+        
+    return email
 
-class CourseResponse(CourseCreate):
-    id: str
-    semester_id: str
-
-    class Config:
-        from_attributes = True
-
-class SemesterCreate(BaseModel):
-    name: str = Field(..., min_length=1)
-
-class SemesterResponse(BaseModel):
-    id: str
-    name: str
-    courses: List[CourseResponse] = []
-
-    class Config:
-        from_attributes = True
-
-# GPA
-
-class SemesterGPA(BaseModel):
-    semester_id: str
-    semester_name: str
-    gpa: float
-    credits: int
-
-class GPASummary(BaseModel):
-    cumulative_gpa: float
-    total_credits: int
-    semesters: List[SemesterGPA]
+def get_semester_guard(semester_id: str, email: str = Depends(get_current_user)):
+    with db_lock:
+        users_db = load_db()
+        if semester_id not in users_db[email]["semesters"]:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Semester not found"
+            )
+        
+    return semester_id
 
 # API ENDPOINTS
 
