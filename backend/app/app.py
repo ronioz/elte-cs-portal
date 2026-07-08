@@ -53,7 +53,18 @@ class SemesterResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# GPA
 
+class SemesterGPA(BaseModel):
+    semester_id: str
+    semester_name: str
+    gpa: float
+    credits: int
+
+class GPASummary(BaseModel):
+    cumulative_gpa: float
+    total_credits: int
+    semesters: List[SemesterGPA]
 
 # API ENDPOINTS
 
@@ -124,7 +135,7 @@ def get_semesters(email: str):
     return semesters_data
 
 @app.post("/api/v1/semesters", response_model=SemesterResponse)
-def add_semesters(email: str, data: SemesterCreate):
+def add_semester(email: str, data: SemesterCreate):
     users_db = load_db()
     
     semester_id = str(uuid.uuid4())
@@ -241,5 +252,54 @@ def delete_course(email: str, semester_id: str, course_id: str):
 # GPA CALCULATION
 
 @app.get("/api/v1/gpa/summary")
-def get_calculations():
-    pass
+def get_calculations(email: str):
+    users_db = load_db()
+
+    if email not in users_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    cumulative_credits = 0
+    cumulative_quality_points = 0
+    semesters_gpa_list = []
+
+    for semester in users_db[email]["semesters"].values():
+        semester_credits = 0
+        semester_quality_points = 0
+
+        for course in semester["courses"].values():
+            c_credits = course["credits"]
+            c_grade = course["grade"]
+
+            c_quality_points = c_credits * c_grade
+
+            semester_credits += c_credits
+            semester_quality_points += c_quality_points
+
+            cumulative_credits += c_credits
+            cumulative_quality_points += c_quality_points
+
+        if semester_credits > 0:
+            semester_gpa = round(semester_quality_points / semester_credits, 2)
+        else:
+            semester_gpa = 0
+
+        semesters_gpa_list.append({
+            "semester_id": semester["id"],
+            "semester_name": semester["name"],
+            "gpa": semester_gpa,
+            "credits": semester_credits
+        })
+
+    if cumulative_credits > 0:
+        cumulative_gpa = round(cumulative_quality_points / cumulative_credits, 2)
+    else:
+        cumulative_gpa = 0
+
+    return {
+        "cumulative_gpa": cumulative_gpa,
+        "total_credits": cumulative_credits,
+        "semesters": semesters_gpa_list
+    }        
